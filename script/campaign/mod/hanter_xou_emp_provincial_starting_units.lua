@@ -133,11 +133,4 @@ end
 
 cm:add_first_tick_callback_new(function()
     replace_units();
-    -- local faction = cm:get_human_factions()[1];
-    -- cm:add_faction_turn_start_listener_by_name(
-    --     "hanter_xou_emp_provincial_starting_units",
-    --     faction,
-    --     replace_units,
-    --     false
-    -- )
 end);
