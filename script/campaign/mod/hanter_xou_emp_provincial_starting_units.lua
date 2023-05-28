@@ -1,7 +1,7 @@
 --[[
     Set to true if we want additional logging/listeners for debugging
 --]]
-local debug_mode = true;
+local debug_mode = false;
 
 --[[
     Custom logging for easier debugging.
