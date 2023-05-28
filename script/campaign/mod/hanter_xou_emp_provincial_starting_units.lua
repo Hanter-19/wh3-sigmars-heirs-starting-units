@@ -1,4 +1,9 @@
 --[[
+    Set to true if we want additional logging/listeners for debugging
+--]]
+local debug_mode = true;
+
+--[[
     Custom logging for easier debugging.
 --]]
 local function out_h(str)
@@ -229,7 +234,7 @@ end
     A function that will finally convert all applicable Empire units in existing armies to their Provincial counterparts.
     It does so by first removing all units from each Lord, then adding all the units in the Lord's "units_after" array from the armies table.
 --]]
-local function replace_units()
+function hanter_replace_units()
     if cm:is_new_game() then
         -- preparation
         populate_armies();
@@ -250,12 +255,76 @@ local function replace_units()
                 end
             end
         end
+        -- Trigger a custom event in case other mods want to specifically act right after we finish replacing the troops
+        core:trigger_custom_event("ScriptEventProvincialTroopReplacementCompleted",{});
     end
 end
 
 --[[
     Add a listener that triggers on the first tick to start our process
+
+    Works fine in vanilla (ie no other mods altering starting Empire lords), but has issues the following:
+
+    Doesn't work with Mixu's LL because Mixu's replacements are done at add_first_tick_callback
+    If for whatever reason Mixu's LLs still aren't spawned at that point, then it will reattempt it at FactionTurnStart event (see mixu_spawn_faction_leader_listener function in !mixu_ll_global_functions.lua)
+    as well as at FactionEncountersOtherFaction.
+    
+    Doesn't work with graetor's Solland Overhaul either. eldred_replace_starting_general() gets called at add_first_tick_callback
 --]]
-cm:add_first_tick_callback_new(function()
-    replace_units();
+-- cm:add_first_tick_callback_new(function()
+--     hanter_replace_units();
+-- end);
+
+--[[
+    For now we will use post-first tick so that our changes will act after Solland Overhaul and Mixu's LLs (for the first attempt at least)
+--]]
+cm:add_post_first_tick_callback(function()
+    hanter_replace_units();
 end);
+
+
+-- Hopefully we shouldn't need to use this (do the replacement at FactionTurnStart which is much later after First Tick).
+-- I'm leaving this code here in case we want to try using it for any situations where some Empire Lord is only given their army at a later stage
+--[[
+core:add_listener(
+    "provincial_units_replacer_listener",
+    "FactionTurnStart",
+    function(context)
+        -- Trigger on the first human player's turn only
+        return context:faction():name() == cm:get_human_factions()[1] and cm:model():turn_number()==1;
+    end,
+    function(context)
+        hanter_replace_units();
+    end,
+    false -- do not persist
+);
+--]]
+
+if debug_mode then
+
+    -- Test our custom event ScriptEventProvincialTroopReplacementCompleted
+    core:add_listener(
+        "provincial_units_replacement_completed_listener",
+        "ScriptEventProvincialTroopReplacementCompleted",
+        true,
+        function(context)
+            out_h("Provincial Troop Replacement completed and ScriptEventProvincialTroopReplacementCompleted Event triggered");
+        end,
+        true
+    )
+
+    -- Some mods that change a faction leader will spawn a new faction leader and kill the old one; This will help log when that's happening
+    core:add_listener(
+    "provincial_units_replacer_character_killed_listener",
+    "CharacterConvalescedOrKilled",
+    function()
+        return cm:model():turn_number() == 1;
+    end,
+    function(context)
+        local c = context:character();
+        out_h("Character killed: "..c:character_subtype_key().." from: "..c:faction():name());
+    end,
+    true
+    );
+    
+end
